@@ -4,7 +4,7 @@ A concept sales-gallery site for **Horizon Tower**, a fictional 72-level residen
 Dubai. Instead of a rendered brochure, the visitor explores the building itself: choose a level, choose a residence,
 and drag the sun across the sky to see how the light falls on each facade.
 
-**Live:** <!-- LIVE_URL -->
+**Live:** https://dubai-horizon-3d.vercel.app
 
 > Concept project — fictional brand. Horizon Tower, Lumen Quay, every price and every figure are invented.
 
