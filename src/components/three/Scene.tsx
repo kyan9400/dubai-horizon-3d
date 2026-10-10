@@ -18,6 +18,25 @@ export interface SceneProps {
   onLost: () => void;
 }
 
+/** Let the browser handle input and paint before the next slice of scene work. */
+const yieldToMain = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+/**
+ * Mounts the scene in slices (tower, then city, then the rest), one per task, so the geometry
+ * generation never lands as one long blocking task on a slow phone.
+ */
+function Steps({ step, total, onNext }: { step: number; total: number; onNext: () => void }) {
+  useEffect(() => {
+    if (step >= total) return;
+    let alive = true;
+    yieldToMain().then(() => alive && onNext());
+    return () => {
+      alive = false;
+    };
+  }, [step, total, onNext]);
+  return null;
+}
+
 /** Compiles every shader behind the poster, then reports ready after the first real frame. */
 function WarmUp({ onReady }: { onReady: () => void }) {
   const gl = useThree((s) => s.gl);
@@ -28,7 +47,8 @@ function WarmUp({ onReady }: { onReady: () => void }) {
 
   useEffect(() => {
     let alive = true;
-    gl.compileAsync(scene, camera)
+    yieldToMain()
+      .then(() => (alive ? gl.compileAsync(scene, camera) : undefined))
       .catch(() => undefined)
       .then(() => {
         if (!alive) return;
@@ -112,6 +132,8 @@ export default function Scene({ tier, reduced, onReady, onLost }: SceneProps) {
   const uniforms = useMemo(() => createUniforms(), []);
   const crownRef = useRef<THREE.MeshStandardMaterial>(null);
   const [revealed, setRevealed] = useState(false);
+  const [step, setStep] = useState(0);
+  const nextStep = useCallback(() => setStep((n) => n + 1), []);
   const handleReady = useCallback(() => {
     setRevealed(true);
     onReady();
@@ -131,13 +153,19 @@ export default function Scene({ tier, reduced, onReady, onLost }: SceneProps) {
       }}
     >
       <Reflections resolution={t.envRes} />
-      <World uniforms={uniforms} shadows={t.shadows} buildings={t.buildings} crownRef={crownRef} />
-      <Tower uniforms={uniforms} fins={tier !== "low"} shadows={t.shadows} crownRef={crownRef} />
-      <Selection uniforms={uniforms} />
-      <CameraRig reduced={reduced} revealed={revealed} />
-      <AdaptiveResolution cap={t.dpr} />
-      <WarmUp onReady={handleReady} />
       <ContextWatch onLost={onLost} />
+      {/* the tower first, so its crown material exists when the world binds the sun to it */}
+      <Tower uniforms={uniforms} fins={tier !== "low"} shadows={t.shadows} crownRef={crownRef} />
+      {step >= 1 && <World uniforms={uniforms} shadows={t.shadows} buildings={t.buildings} crownRef={crownRef} />}
+      {step >= 2 && (
+        <>
+          <Selection uniforms={uniforms} />
+          <CameraRig reduced={reduced} revealed={revealed} />
+          <AdaptiveResolution cap={t.dpr} />
+          <WarmUp onReady={handleReady} />
+        </>
+      )}
+      <Steps step={step} total={2} onNext={nextStep} />
     </Canvas>
   );
 }

@@ -31,12 +31,16 @@ and drag the sun across the sky to see how the light falls on each facade.
   coarse pointer; `?quality=low|medium|high` overrides). High: DPR 2, on-change shadow map. Medium: DPR 1.5, no shadows.
   Low: DPR 1, no AA, no fins, fewer buildings.
 - Adaptive resolution measured only over consecutive frames, so on-demand pauses are never mistaken for slowness.
-- Shaders compiled with `gl.compileAsync` behind a code-made poster; the canvas fades in with opacity only.
-- The 3D chunk (three + r3f + drei) is loaded with `next/dynamic({ ssr: false })` after the page is interactive.
+- The scene mounts in slices (tower, city, the rest), yielding to the main thread between them; shaders are then compiled
+  with `gl.compileAsync` behind a code-made poster, and the canvas fades in with opacity only.
+- The 3D chunk (three + r3f + drei) is loaded with `next/dynamic({ ssr: false })` only after window `load` plus an idle
+  callback, never during hydration. A throwaway WebGL probe (no three import) runs first: software renderers
+  (SwiftShader, llvmpipe, Microsoft Basic Render, or a `failIfMajorPerformanceCaveat` refusal) never load it and keep the
+  poster. `?quality=low|medium|high` forces the 3D on.
 - Native scrolling only: no scroll-smoothing library, no GSAP, no `backdrop-filter`.
 - `prefers-reduced-motion` is respected by default, with a header toggle to turn full motion on (saved in
   localStorage, `?motion=full|reduced` overrides). Reduced motion = no intro sweep, cuts instead of glides, no time-lapse.
-- No WebGL or a lost context: the designed poster stays and the residence finder keeps working (it is plain DOM).
+- No WebGL, a software renderer or a lost context: the designed poster stays and the residence finder keeps working (it is plain DOM).
 
 ## Tech stack
 

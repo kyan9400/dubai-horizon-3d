@@ -66,8 +66,10 @@ Plus: custom 404 ("Level not found"), skip link, sticky header with section nav 
 | Context buildings | 520 | 320 | 140 |
 | Env map resolution | 256 | 128 | 64 |
 
-GPU name via `WEBGL_debug_renderer_info`: software → low; Intel/AMD integrated, Mali, Adreno, PowerVR → ≤ medium;
-coarse pointer → ≤ medium. `?quality=low|medium|high` overrides. drei `<PerformanceMonitor>` lowers DPR on decline.
+GPU name via `WEBGL_debug_renderer_info` (probed after window `load` + idle, without importing three): software
+renderer (SwiftShader, llvmpipe, Basic Render, or a `failIfMajorPerformanceCaveat` refusal) → no 3D chunk at all, the
+poster stays; Intel/AMD integrated, Mali, Adreno, PowerVR → ≤ medium;
+coarse pointer → ≤ medium. `?quality=low|medium|high` overrides and forces the 3D on. drei `<PerformanceMonitor>` lowers DPR on decline.
 
 **Render on demand:** `frameloop="demand"`; frames only on control change, camera drag, an active glide, the intro
 sweep, or the time-lapse. Time-lapse pauses when the canvas leaves the viewport or the tab hides.
@@ -76,11 +78,11 @@ sweep, or the time-lapse. Time-lapse pauses when the canvas leaves the viewport 
 localStorage, `?motion=full|reduced` overrides). Reduced = no intro sweep, level/residence changes cut instead of
 glide, no time-lapse button. All controls still work.
 
-**Warm-up:** the poster stays visible with a "Composing the skyline" status while the scene compiles
-(`gl.compileAsync`), then the canvas fades in (opacity only).
+**Warm-up:** the poster stays visible with a "Composing the skyline" status while the scene mounts in
+slices (yielding between them) and compiles (`gl.compileAsync`), then the canvas fades in (opacity only).
 
-**No-WebGL / context lost:** a designed code-made SVG poster of the tower at golden hour stays in place with a short
-note; the residence finder (level, residence, details) keeps working because it is plain DOM.
+**No-WebGL / software renderer / context lost:** a designed code-made SVG poster of the tower at golden hour stays in place (with a short
+note when WebGL is missing or lost); the residence finder (level, residence, details) keeps working because it is plain DOM.
 
 ## 5. Design system
 
@@ -176,7 +178,7 @@ No downloaded models, textures, HDRIs, images or audio.
 
 ## 8. Performance budget
 
-- Route first-load JS < 250 KB gzip, excluding the lazy 3D chunk (three + r3f + drei) which loads after hydration.
+- Route first-load JS < 250 KB gzip, excluding the lazy 3D chunk (three + r3f + drei) which loads after window `load` + idle.
 - LCP element = H1 text (server-rendered). Fonts `display: swap`, two families.
 - 3D: ≤ 12 draw calls, ≤ 120 k triangles, no textures (all procedural in shader), shadow map only on high tier.
 - Idle tab = 0 frames rendered. No scroll smoothing library (native scroll), no GSAP needed.
