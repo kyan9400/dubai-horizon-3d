@@ -1,3 +1,4 @@
+import { MobileMenu } from "./MobileMenu";
 import { MotionToggle } from "./MotionToggle";
 
 const NAV = [
@@ -34,6 +35,7 @@ export function Header() {
             <span className="cta-long">Private viewings</span>
             <span className="cta-short">Viewings</span>
           </a>
+          <MobileMenu items={NAV} cta={{ href: "#enquire", label: "Private viewings" }} />
         </div>
       </div>
     </header>

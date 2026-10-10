@@ -2,7 +2,7 @@
 
 Horizon Tower contains **no third-party 3D models, textures, HDRIs, images, video or audio**.
 Every visual is made in code for this project: the tower, city, lagoon, sky and stars are procedural geometry and
-shaders; the poster, map, favicon and Open Graph image are code-drawn SVG / `next/og`.
+shaders; the poster, map and favicon are code-drawn SVG. The Open Graph / Twitter image is a screenshot of the live site.
 
 ## Fonts (self-hosted at build time via `next/font/google`)
 

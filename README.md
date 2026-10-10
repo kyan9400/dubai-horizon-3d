@@ -64,7 +64,7 @@ Set `NEXT_PUBLIC_SITE_URL` to the deployed URL for absolute Open Graph links.
 ## Project layout
 
 ```
-src/app/                 layout, page, 404, OG image, icon, robots, sitemap, global styles
+src/app/                 layout, page, 404, social preview (opengraph-image.png / twitter-image.png), icon, robots, sitemap, global styles
 src/components/          header, explorer controls + stage, poster, map
 src/components/three/    Scene, Tower, World (sky, ground, city, lights), Selection, CameraRig, materials, geometry
 src/lib/                 tower data model, sun math, quality tiers, motion preference, store
