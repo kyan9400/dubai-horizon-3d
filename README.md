@@ -57,6 +57,7 @@ npm install
 npm run dev      # http://localhost:3000
 npm run build
 npm run lint
+npm run build:pages   # static GitHub Pages mirror in out/ (base path /dubai-horizon-3d)
 ```
 
 Set `NEXT_PUBLIC_SITE_URL` to the deployed URL for absolute Open Graph links.

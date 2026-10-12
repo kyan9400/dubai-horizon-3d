@@ -224,11 +224,17 @@ function TimeControls({ reduced }: { reduced: boolean }) {
             {p.label}
           </button>
         ))}
-        {!reduced && (
-          <button type="button" className="chip chip--play" aria-pressed={playing} onClick={() => explorer.set({ playing: !playing })}>
-            {playing ? "Pause" : "Play a day"}
-          </button>
-        )}
+        {/* always rendered (no layout shift); CSS hides it unless full motion is on */}
+        <button
+          type="button"
+          className="chip chip--play"
+          aria-pressed={playing}
+          onClick={() => {
+            if (!reduced) explorer.set({ playing: !playing });
+          }}
+        >
+          {playing ? "Pause" : "Play a day"}
+        </button>
       </div>
       <p className="ctl-note">Equinox sun path at 25.2° N, the latitude of Dubai.</p>
     </fieldset>

@@ -61,4 +61,4 @@ export function useReducedMotion(): boolean {
 }
 
 /** Runs before paint (stringified into a <script> in the root layout). */
-export const motionBootScript = `(function(){try{var r=window.matchMedia('(prefers-reduced-motion: reduce)').matches;var s=null;try{s=localStorage.getItem('${MOTION_KEY}')}catch(e){}var u=new URLSearchParams(location.search).get('motion');var c=u||s;if(c==='full')r=false;else if(c==='reduced')r=true;var d=document.documentElement;d.classList.add(r?'reduce-motion':'motion-ok');}catch(e){}})();`;
+export const motionBootScript = `(function(){try{var r=window.matchMedia('(prefers-reduced-motion: reduce)').matches;var s=null;try{s=localStorage.getItem('${MOTION_KEY}')}catch(e){}var u=new URLSearchParams(location.search).get('motion');var c=(u==='full'||u==='reduced')?u:s;if(c==='full')r=false;else if(c==='reduced')r=true;var d=document.documentElement;d.classList.add(r?'reduce-motion':'motion-ok');}catch(e){}})();`;

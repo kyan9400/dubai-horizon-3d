@@ -221,6 +221,34 @@ main:focus {
   background: rgb(10 12 17 / 0.96);
   border-bottom: 1px solid var(--color-night-700);
 }
+/* 2px gold scroll progress on the header's bottom edge; CSS scroll timeline, hidden where unsupported */
+.scroll-progress {
+  display: none;
+}
+@supports (animation-timeline: scroll()) {
+  .scroll-progress {
+    display: block;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: var(--color-gold-400);
+    transform: scaleX(0);
+    transform-origin: left;
+    pointer-events: none;
+    animation: grow-x linear both;
+    animation-timeline: scroll(root);
+  }
+}
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
 .header-row {
   height: 100%;
   display: flex;
@@ -287,9 +315,21 @@ main:focus {
   border-radius: 50%;
   border: 1px solid currentColor;
 }
-.motion-toggle[aria-pressed="true"] .motion-dot {
+html.motion-ok .motion-dot {
   background: var(--color-lagoon-400);
   border-color: var(--color-lagoon-400);
+}
+/* both labels share one grid cell, so the button keeps the width of the longer one; the boot script's html class
+   picks the visible label before first paint (no hydration shift) */
+.ml {
+  display: inline-grid;
+}
+.ml > span {
+  grid-area: 1 / 1;
+}
+html:not(.motion-ok) .ml-on,
+html.motion-ok .ml-off {
+  visibility: hidden;
 }
 .motion-label-long {
   position: absolute;
@@ -705,6 +745,10 @@ html.reduce-motion .stage-canvas {
   border-color: var(--color-lagoon-400);
   color: var(--color-lagoon-400);
 }
+/* rendered on the server too; shown only with full motion (keyed on the boot script's html class) */
+html:not(.motion-ok) .chip--play {
+  display: none;
+}
 .chip--play[aria-pressed="true"] {
   background: var(--color-lagoon-400);
   border-color: var(--color-lagoon-400);
@@ -1090,6 +1134,51 @@ html.reduce-motion .stage-canvas {
   margin-top: var(--space-12);
   font-size: 0.8125rem;
   color: var(--color-sand-300);
+}
+
+/* ---------- section dots (>= 1100px; mounted after idle) ---------- */
+.section-dots {
+  display: none;
+}
+@media (min-width: 1100px) {
+  .section-dots {
+    display: block;
+    position: fixed;
+    right: var(--space-1);
+    top: 50%;
+    z-index: 20;
+    transform: translateY(-50%);
+  }
+}
+.section-dots a {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+}
+/* two-tone ring: the focus outline stays visible over both the dark and the light (sand) sections */
+.section-dots a:focus-visible {
+  outline-offset: -4px;
+  box-shadow: inset 0 0 0 6px var(--color-night-950);
+}
+/* light fill + dark ring, so each dot reads on dark and on light backgrounds (no opacity fade) */
+.section-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-sand-300);
+  box-shadow: 0 0 0 1.5px var(--color-night-950);
+  transition: transform 0.3s ease;
+}
+.section-dots a:hover .section-dot {
+  transform: scale(1.25);
+}
+.section-dots a[aria-current="true"] .section-dot {
+  background: var(--color-gold-400);
+  transform: scale(1.5);
+}
+html.reduce-motion .section-dot {
+  transition: none;
 }
 
 /* ---------- reveal (full motion only; transform + opacity) ---------- */

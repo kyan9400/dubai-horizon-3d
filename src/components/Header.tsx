@@ -1,13 +1,9 @@
 import { MobileMenu } from "./MobileMenu";
 import { MotionToggle } from "./MotionToggle";
+import { SECTIONS } from "@/lib/site";
 
-const NAV = [
-  { href: "#explore", label: "Explore" },
-  { href: "#tower", label: "Tower" },
-  { href: "#residences", label: "Residences" },
-  { href: "#amenities", label: "Amenities" },
-  { href: "#location", label: "Location" },
-];
+// header nav = every section except the enquiry, which has its own CTA
+const NAV = SECTIONS.filter((s) => s.id !== "enquire").map((s) => ({ href: `#${s.id}`, label: s.label }));
 
 export function Header() {
   return (
@@ -38,6 +34,8 @@ export function Header() {
           <MobileMenu items={NAV} cta={{ href: "#enquire", label: "Private viewings" }} />
         </div>
       </div>
+      {/* scroll progress: CSS scroll timeline only, no JS */}
+      <div className="scroll-progress" aria-hidden="true" />
     </header>
   );
 }

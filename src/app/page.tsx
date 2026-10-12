@@ -3,7 +3,37 @@ import { ExplorerControls } from "@/components/ExplorerControls";
 import { ExplorerStage } from "@/components/ExplorerStage";
 import { LocationMap } from "@/components/LocationMap";
 import { Reveal } from "@/components/Reveal";
+import { Extras } from "@/components/Extras";
 import { AMENITIES, COLLECTIONS } from "@/lib/tower";
+import { AUTHOR, PORTFOLIO_URL, SITE_URL } from "@/lib/site";
+
+// Structured data. The brand is fictional, so no real-estate Offer schema.
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      name: "Horizon Tower",
+      url: SITE_URL,
+      description:
+        "Explore Horizon Tower, a fictional 72-level residence in Dubai, in real-time 3D: choose a level and a home, and move the sun across the sky.",
+      inLanguage: "en",
+      creator: { "@type": "Person", name: AUTHOR, url: PORTFOLIO_URL },
+    },
+    {
+      "@type": "CreativeWork",
+      "@id": `${SITE_URL}/#work`,
+      name: "Horizon Tower — a procedural 3D tower explorer",
+      url: SITE_URL,
+      isFamilyFriendly: true,
+      keywords: "3D website, WebGL, React Three Fiber, procedural architecture, concept project",
+      copyrightYear: 2026,
+      copyrightHolder: { "@type": "Person", name: AUTHOR, url: PORTFOLIO_URL },
+      creator: { "@type": "Person", name: AUTHOR, url: PORTFOLIO_URL },
+    },
+  ],
+};
 
 const FIGURES = [
   { value: "288", unit: "m", label: "Height to the spire" },
@@ -37,7 +67,7 @@ export default function Home() {
         {/* 1 · Hero + explorer */}
         <section id="explore" className="hero" aria-labelledby="hero-title">
           <div className="hero-grid">
-            <div className="hero-copy wrap-l">
+            <div className="hero-copy">
               <p className="eyebrow">Lumen Quay, Dubai — Completion Q4 2029</p>
               <h1 id="hero-title" className="display">
                 Seventy-two levels. <em>One turning horizon.</em>
@@ -221,6 +251,11 @@ export default function Home() {
         </div>
       </footer>
       <Reveal />
+      <Extras />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD).replace(/</g, "\\u003c") }}
+      />
     </>
   );
 }
