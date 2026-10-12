@@ -45,13 +45,26 @@ Plus: custom 404 ("Level not found"), skip link, sticky header with section nav 
 - Selection overlay: a gold outline loop around the chosen level and a translucent teal volume over the chosen
   residence (sector of the floor plate, rebuilt only when the selection changes).
 - Crown: a lit fin crown + aviation beacon. Podium, lagoon ring and a 2-lane causeway.
-- Context city: an instanced low/mid-rise district (one draw call) with night window glow from the same shader trick.
+- Context city: three instanced draw calls (blocks, round towers, stepped towers) with facade, roof and window-light patterns in the shader.
 - Sky: back-face sphere shader with real solar geometry — sun position from the equinox solar path at 25.2° N,
   hour 05:00–23:00. Day → golden hour → blue hour → night with procedural stars. Fog and the sun light colour follow.
 - Lighting: one directional sun (+ shadow map on high tier only, updated only on change), hemisphere fill, and a
-  code-made `<Environment>` built from `<Lightformer>`s for glass reflections (no HDRI download).
+  code-made `<Environment>` that renders the sky dome itself (plus two soft `<Lightformer>`s) for glass reflections (no HDRI download).
 - Camera: OrbitControls (damped, clamped polar + distance). Changing level glides the orbit target to that level;
   picking a residence swings the camera to face that facade. Dragging cancels any glide.
+
+**Look (visual redesign, 2026-10).** The first frame is an establishing shot at sunset (18:15, sun 1° above the Gulf):
+the whole tower, crown and spire seen from the east-south-east, with the sun, a glitter path on the sea and thin cirrus
+behind it. The setting is laid out by one set of functions shared by the ground shader and the building placement: the
+Gulf to the west, a winding creek north of the quay, the round lagoon, a 6-unit street grid with boulevards, parks and
+beaches, and desert dunes beyond the city edge. The context city is three instanced draw calls (blocks, round towers,
+stepped towers) on 2 × 2 lots per block, with a tall glass downtown to the south, a marina skyline on the coast and a low
+stone quarter across the creek; facades, roofs and window lights come from the shader. Water reflects the same analytic
+sky as the dome (ripples, Fresnel, sun glitter), and the reflection cube now renders that sky dome, so all glass mirrors
+the real time of day. The tower glass is cleaner (thin bronze slabs, fewer frame bands), the sky gardens at L22/L46/L71
+are set back and lit, the crown blades are taller, and additive halos sit on the crown and the beacon. A `uLights` level
+(already ~0.6 at sunset) lights windows, streets and the quay in stages. Scroll story (desktop, full motion): while the
+explorer column scrolls past the sticky stage, the camera closes in from the establishing shot to the selected level.
 
 **Controls (DOM, outside the canvas, keyboard accessible):** level slider (1–72) with −/+ buttons; residence buttons
 (4 per floor, 2 on penthouse floors, an amenity card on shared levels); time slider + Day / Golden hour / Night presets;
@@ -180,7 +193,7 @@ No downloaded models, textures, HDRIs, images or audio.
 
 - Route first-load JS < 250 KB gzip, excluding the lazy 3D chunk (three + r3f + drei) which loads after window `load` + idle.
 - LCP element = H1 text (server-rendered). Fonts `display: swap`, two families.
-- 3D: ≤ 12 draw calls, ≤ 120 k triangles, no textures (all procedural in shader), shadow map only on high tier.
+- 3D: ≤ 22 draw calls (plus 6 small reflection-cube passes per drawn frame), ≤ 120 k triangles, no textures (all procedural in shader), shadow map only on high tier.
 - Idle tab = 0 frames rendered. No scroll smoothing library (native scroll), no GSAP needed.
 - CSS: only `transform`/`opacity` animated, no `backdrop-filter` anywhere.
 - Lighthouse mobile targets: Performance ≥ 85, Accessibility/Best Practices/SEO ≥ 95.

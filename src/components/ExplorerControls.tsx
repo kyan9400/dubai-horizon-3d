@@ -15,7 +15,7 @@ function setFloor(floor: number) {
 
 const PRESETS = [
   { label: "Day", hour: 12.5 },
-  { label: "Golden hour", hour: 17.75 },
+  { label: "Golden hour", hour: 18.2 },
   { label: "Night", hour: 21.5 },
 ];
 

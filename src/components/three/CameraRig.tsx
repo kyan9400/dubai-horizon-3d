@@ -9,10 +9,16 @@ import { explorer } from "@/lib/store";
 import { FLOOR_H, floorBaseY, floorRotationDeg, residencesOn } from "@/lib/tower";
 
 const DEG = Math.PI / 180;
-const TOWER_MID = 15;
+/* Hero framing: the whole tower, crown and spire against the low western sun, from the east-south-east.
+   Scrolling the explorer column (desktop) closes in on the selected level. */
+const HERO_THETA = 1.45;
+const WIDE_Y = 15.5;
+const WIDE_PHI = 1.49;
+const CLOSE_PHI = 1.3;
+const CLOSE_R = 34;
 
 function restTargetY(floor: number) {
-  return 0.62 * (floorBaseY(floor) + FLOOR_H / 2) + 0.38 * TOWER_MID;
+  return floorBaseY(floor) + FLOOR_H / 2;
 }
 
 /** Spherical theta that looks at the selected residence's facade (three-quarter view), or null. */
@@ -36,19 +42,21 @@ function shortest(from: number, to: number) {
  * to that facade, dragging cancels the swing. frame() returns true while another frame is needed (frameloop="demand").
  */
 class Rig {
-  targetY = 6;
-  goalY = restTargetY(explorer.get().floor);
-  theta = 0;
-  goalTheta = 0;
-  radius = 78;
-  goalRadius = 37;
-  phi = 1.42;
-  goalPhi = 1.2;
+  targetY = 9;
+  goalY = WIDE_Y;
+  theta = HERO_THETA - 0.85;
+  goalTheta = HERO_THETA;
+  radius = 120;
+  goalRadius = 72;
+  phi = 1.36;
+  goalPhi = WIDE_PHI;
   orbiting = true;
   moving = true;
-  lambda = 1.5;
+  lambda = 1.2;
   revealed = false;
   reduced = false;
+  zoom = 0;
+  wideR = 72;
   private sph = new THREE.Spherical();
   private v = new THREE.Vector3();
   private lastKey = "";
@@ -56,10 +64,18 @@ class Rig {
   constructor(reduced: boolean) {
     const { floor, unit } = explorer.get();
     this.lastKey = `${floor}:${unit}`;
-    this.goalTheta = unitTheta(floor, unit) ?? -0.75;
-    this.theta = this.goalTheta - 1.1;
     this.reduced = reduced;
+    this.goalY = this.frameY(floor);
     if (reduced) this.snap();
+  }
+
+  private frameY(floor: number) {
+    const k = 0.2 + 0.8 * this.zoom;
+    return WIDE_Y + (restTargetY(floor) - WIDE_Y) * k;
+  }
+
+  private frameR() {
+    return this.wideR + (CLOSE_R - this.wideR) * this.zoom;
   }
 
   private snap() {
@@ -69,17 +85,44 @@ class Rig {
     this.radius = this.goalRadius;
   }
 
+  /** pick up wherever the visitor left the camera */
+  private pickUp(camera: THREE.Camera, controls: OrbitControlsImpl) {
+    this.v.copy(camera.position).sub(controls.target);
+    this.sph.setFromVector3(this.v);
+    this.theta = this.sph.theta;
+    this.phi = this.sph.phi;
+    this.radius = this.sph.radius;
+    this.targetY = controls.target.y;
+  }
+
   setReduced(reduced: boolean) {
     this.reduced = reduced;
   }
 
   setPortrait(portrait: boolean) {
-    const goal = portrait ? 41 : 37;
-    if (goal === this.goalRadius) return false;
-    this.goalRadius = goal;
-    if (this.reduced) this.radius = goal;
+    const goal = portrait ? 78 : 72;
+    if (goal === this.wideR) return false;
+    this.wideR = goal;
+    this.goalRadius = this.frameR();
+    if (this.reduced) this.radius = this.goalRadius;
     this.orbiting = true;
     this.moving = true;
+    return true;
+  }
+
+  /** 0 = establishing shot, 1 = close on the selected level. */
+  setZoom(z: number, camera: THREE.Camera, controls: OrbitControlsImpl) {
+    if (Math.abs(z - this.zoom) < 0.004) return false;
+    this.zoom = z;
+    if (this.revealed) this.pickUp(camera, controls);
+    this.goalTheta = this.revealed ? this.theta : this.goalTheta;
+    this.goalY = this.frameY(explorer.get().floor);
+    this.goalRadius = this.frameR();
+    this.goalPhi = WIDE_PHI + (CLOSE_PHI - WIDE_PHI) * z;
+    this.lambda = 3;
+    this.orbiting = true;
+    this.moving = true;
+    if (this.reduced) this.snap();
     return true;
   }
 
@@ -99,27 +142,18 @@ class Rig {
     if (key === this.lastKey) return false;
     this.lastKey = key;
 
-    // pick up wherever the visitor left the camera
-    this.v.copy(camera.position).sub(controls.target);
-    this.sph.setFromVector3(this.v);
-    this.theta = this.sph.theta;
-    this.phi = this.sph.phi;
-    this.radius = this.sph.radius;
-    this.targetY = controls.target.y;
-
-    this.goalY = restTargetY(floor);
+    this.pickUp(camera, controls);
+    this.goalY = this.frameY(floor);
     const th = unitTheta(floor, unit);
     this.goalTheta = th === null ? this.theta : shortest(this.theta, th);
-    this.goalPhi = th === null ? this.phi : Math.min(Math.max(this.phi, 1.05), 1.35);
-    this.goalRadius = this.radius;
+    this.goalPhi = th === null ? this.phi : Math.min(Math.max(this.phi, 1.05), 1.45);
+    this.goalRadius = this.frameR();
     this.lambda = 4;
     this.orbiting = true;
     this.moving = true;
     if (this.reduced) {
       // cut, don't sweep
-      this.targetY = this.goalY;
-      this.theta = this.goalTheta;
-      this.phi = this.goalPhi;
+      this.snap();
     }
     return true;
   }
@@ -198,6 +232,41 @@ export function CameraRig({ reduced, revealed }: Props) {
     [rig, get]
   );
 
+  // Scroll story (desktop, full motion): while the explorer column scrolls past the sticky stage,
+  // the camera closes in from the establishing shot to the selected level.
+  useEffect(() => {
+    if (reduced) return;
+    const wide = window.matchMedia("(min-width: 1024px)");
+    const hero = document.getElementById("explore");
+    if (!hero) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const c = controlsRef.current;
+      if (!c) return;
+      let z = 0;
+      if (wide.matches) {
+        const r = hero.getBoundingClientRect();
+        const span = Math.max(400, r.height - window.innerHeight);
+        const p = Math.min(1, Math.max(0, -r.top / span));
+        z = p * p * (3 - 2 * p);
+      }
+      const { camera, invalidate } = get();
+      if (rig.setZoom(Math.round(z * 100) / 100, camera, c)) invalidate();
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    wide.addEventListener("change", onScroll);
+    onScroll();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      wide.removeEventListener("change", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [rig, get, reduced]);
+
   useEffect(() => {
     const c = controlsRef.current;
     if (!c) return;
@@ -223,7 +292,7 @@ export function CameraRig({ reduced, revealed }: Props) {
       dampingFactor={0.09}
       rotateSpeed={0.55}
       minPolarAngle={0.35}
-      maxPolarAngle={1.5}
+      maxPolarAngle={1.52}
     />
   );
 }

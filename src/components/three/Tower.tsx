@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import {
   FLOORS,
@@ -17,6 +17,7 @@ import { createGlassMaterial, createSlabMaterial, type SharedUniforms } from "./
 const DEG = Math.PI / 180;
 const SLAB_H = FLOOR_H - GLASS_H;
 const FINS_PER_FLOOR = 40;
+const GARDEN_FLOORS = [22, 46, 71];
 
 interface Props {
   uniforms: SharedUniforms;
@@ -70,14 +71,17 @@ export function Tower({ uniforms, fins, shadows, crownRef }: Props) {
 
     for (let i = 0; i < FLOORS; i++) {
       const floor = i + 1;
-      const size = floorHalfSize(floor);
+      // sky gardens and the crown pool are set back behind the facade line
+      const garden = GARDEN_FLOORS.includes(floor);
+      const size = floorHalfSize(floor) * (garden ? 0.9 : 1);
       q.setFromAxisAngle(up, floorRotationDeg(floor) * DEG);
       p.set(0, floorBaseY(floor), 0);
       s.set(size, 1, size);
       m.compose(p, q, s);
       glassRef.current?.setMatrixAt(i, m);
       p.y += GLASS_H;
-      slabRef.current?.setMatrixAt(i, m.compose(p, q, s.set(size, 1, size)));
+      const slabSize = floorHalfSize(floor);
+      slabRef.current?.setMatrixAt(i, m.compose(p, q, s.set(slabSize, 1, slabSize)));
 
       if (finRef.current) {
         const rot = floorRotationDeg(floor) * DEG;
@@ -91,7 +95,8 @@ export function Tower({ uniforms, fins, shadows, crownRef }: Props) {
           p.set(lx * cos + lz * sin, floorBaseY(floor), -lx * sin + lz * cos);
           const nAng = Math.atan2(sm.nx, -sm.ny) + rot; // fin depth (local +z) points outward
           q.setFromAxisAngle(up, nAng);
-          finRef.current.setMatrixAt(i * FINS_PER_FLOOR + k, m.compose(p, q, s.set(1, 1, 1)));
+          const f = garden ? 0 : 1; // open loggia: no fins on the garden levels
+          finRef.current.setMatrixAt(i * FINS_PER_FLOOR + k, m.compose(p, q, s.set(f, f, f)));
         }
       }
     }
@@ -106,7 +111,7 @@ export function Tower({ uniforms, fins, shadows, crownRef }: Props) {
         const lz = -sm.y * topSize * 0.98;
         p.set(lx * cos + lz * sin, topY, -lx * sin + lz * cos);
         const a = Math.atan2(sm.y, sm.x);
-        const h = 0.9 + 2.3 * Math.pow(0.5 + 0.5 * Math.cos(a - 3.6), 2.2);
+        const h = 1.3 + 4.6 * Math.pow(0.5 + 0.5 * Math.cos(a - 3.6), 2.0);
         q.setFromAxisAngle(up, Math.atan2(sm.nx, -sm.ny) + topRot);
         crownFinRef.current.setMatrixAt(k, m.compose(p, q, s.set(1, h, 1)));
       }
@@ -173,16 +178,83 @@ export function Tower({ uniforms, fins, shadows, crownRef }: Props) {
       </instancedMesh>
       <mesh position={[0, topY, 0]} rotation={[0, topRot, 0]} scale={[topSize * 0.9, 1, topSize * 0.9]}>
         <primitive object={res.lantern} attach="geometry" />
-        <meshStandardMaterial color="#20262f" metalness={0.9} roughness={0.15} emissive="#ffcf8a" emissiveIntensity={0.15} />
+        <meshStandardMaterial color="#20262f" metalness={0.9} roughness={0.15} emissive="#ffcf8a" emissiveIntensity={0.7} />
       </mesh>
-      <mesh position={[0, topY + 2.6, 0]}>
-        <cylinderGeometry args={[0.018, 0.05, 2.4, 8]} />
-        <meshStandardMaterial color="#cdb68a" metalness={0.9} roughness={0.25} />
+      <mesh position={[0, topY + 3.2, 0]}>
+        <cylinderGeometry args={[0.016, 0.07, 6.4, 8]} />
+        <meshStandardMaterial color="#d8c08e" metalness={0.9} roughness={0.22} />
       </mesh>
-      <mesh position={[0, topY + 3.85, 0]}>
+      <mesh position={[0, topY + 6.45, 0]}>
         <sphereGeometry args={[0.07, 12, 8]} />
         <meshBasicMaterial color="#ff4a3a" toneMapped={false} />
       </mesh>
+      {/* soft halos: the lit crown and the aviation beacon (additive billboards, no textures) */}
+      <Glow uniforms={uniforms} position={[0, topY + 1.6, 0]} size={11} color="#ffb45a" base={0.05} gain={0.55} />
+      <Glow uniforms={uniforms} position={[0, topY + 6.45, 0]} size={1.6} color="#ff4a3a" base={0.25} gain={0.9} />
     </group>
+  );
+}
+
+const glowVertex = /* glsl */ `
+uniform float uSize;
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+  mv.xy += position.xy * uSize;
+  gl_Position = projectionMatrix * mv;
+}`;
+const glowFragment = /* glsl */ `
+uniform vec3 uColor;
+uniform float uBase;
+uniform float uGain;
+uniform float uLights;
+varying vec2 vUv;
+void main() {
+  float d = length(vUv - 0.5) * 2.0;
+  float a = exp(-d * d * 5.0) * (1.0 - smoothstep(0.7, 1.0, d));
+  gl_FragColor = vec4(uColor * a * (uBase + uGain * uLights), 1.0);
+}`;
+
+/** Camera-facing additive halo whose strength follows the shared light level. */
+function Glow({
+  uniforms,
+  position,
+  size,
+  color,
+  base,
+  gain,
+}: {
+  uniforms: SharedUniforms;
+  position: [number, number, number];
+  size: number;
+  color: string;
+  base: number;
+  gain: number;
+}) {
+  const mat = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader: glowVertex,
+        fragmentShader: glowFragment,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+        uniforms: {
+          uSize: { value: size },
+          uColor: { value: new THREE.Color(color) },
+          uBase: { value: base },
+          uGain: { value: gain },
+          uLights: uniforms.uLights,
+        },
+      }),
+    [uniforms, size, color, base, gain]
+  );
+  useEffect(() => () => mat.dispose(), [mat]);
+  return (
+    <mesh position={position} material={mat} renderOrder={3} frustumCulled={false}>
+      <planeGeometry args={[1, 1]} />
+    </mesh>
   );
 }

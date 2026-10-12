@@ -15,7 +15,7 @@ export interface ExplorerState {
 
 type Listener = () => void;
 
-let state: ExplorerState = { floor: 48, unit: 1, hour: 17.6, playing: false };
+let state: ExplorerState = { floor: 48, unit: 3, hour: 18.25, playing: false };
 const listeners = new Set<Listener>();
 
 export const explorer = {

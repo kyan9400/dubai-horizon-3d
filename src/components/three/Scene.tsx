@@ -7,7 +7,7 @@ import * as THREE from "three";
 import { TIERS, type Tier } from "@/lib/quality";
 import { createUniforms } from "./materials";
 import { Tower } from "./Tower";
-import { World } from "./World";
+import { World, createSkyMaterial } from "./World";
 import { Selection } from "./Selection";
 import { CameraRig } from "./CameraRig";
 
@@ -113,16 +113,16 @@ function ContextWatch({ onLost }: { onLost: () => void }) {
   return null;
 }
 
-/** Studio-free environment for glass reflections: code-made light panels, no HDRI download. */
-function Reflections({ resolution }: { resolution: number }) {
+/** Reflections of the real sky: the sky dome itself is drawn into the environment cube (no HDRI download),
+    plus two soft panels for highlights on the glass. Re-rendered only on frames the scene draws anyway. */
+function Reflections({ resolution, sky }: { resolution: number; sky: THREE.ShaderMaterial }) {
   return (
-    <Environment resolution={resolution} frames={1} background={false}>
-      <color attach="background" args={["#56677a"]} />
-      <Lightformer form="rect" intensity={1.6} color="#fff1dc" position={[0, 14, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[30, 30, 1]} />
-      <Lightformer form="rect" intensity={1.2} color="#f6c48e" position={[-18, 2, 0]} rotation={[0, Math.PI / 2, 0]} scale={[40, 4, 1]} />
-      <Lightformer form="rect" intensity={0.9} color="#bcd3e6" position={[18, 3, 0]} rotation={[0, -Math.PI / 2, 0]} scale={[40, 6, 1]} />
-      <Lightformer form="rect" intensity={0.5} color="#9fb5c9" position={[0, 3, 18]} rotation={[0, Math.PI, 0]} scale={[40, 6, 1]} />
-      <Lightformer form="rect" intensity={0.25} color="#c9a77a" position={[0, -6, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[40, 40, 1]} />
+    <Environment resolution={resolution} frames={Infinity} background={false}>
+      <mesh material={sky}>
+        <sphereGeometry args={[400, 32, 16]} />
+      </mesh>
+      <Lightformer form="rect" intensity={0.6} color="#fff1dc" position={[0, 30, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[30, 30, 1]} />
+      <Lightformer form="rect" intensity={0.35} color="#c9a77a" position={[0, -8, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[60, 60, 1]} />
     </Environment>
   );
 }
@@ -130,6 +130,8 @@ function Reflections({ resolution }: { resolution: number }) {
 export default function Scene({ tier, reduced, onReady, onLost }: SceneProps) {
   const t = TIERS[tier];
   const uniforms = useMemo(() => createUniforms(), []);
+  const sky = useMemo(() => createSkyMaterial(uniforms), [uniforms]);
+  useEffect(() => () => sky.dispose(), [sky]);
   const crownRef = useRef<THREE.MeshStandardMaterial>(null);
   const [revealed, setRevealed] = useState(false);
   const [step, setStep] = useState(0);
@@ -146,17 +148,17 @@ export default function Scene({ tier, reduced, onReady, onLost }: SceneProps) {
       dpr={[1, t.dpr]}
       shadows={t.shadows ? "soft" : false}
       gl={{ antialias: t.antialias, powerPreference: "high-performance", alpha: false, stencil: false }}
-      camera={{ fov: 34, near: 0.5, far: 1400, position: [-30, 12, 40] }}
+      camera={{ fov: 34, near: 0.5, far: 2000, position: [60, 26, 26] }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1.05;
+        gl.toneMappingExposure = 0.92;
       }}
     >
-      <Reflections resolution={t.envRes} />
+      <Reflections resolution={t.envRes} sky={sky} />
       <ContextWatch onLost={onLost} />
       {/* the tower first, so its crown material exists when the world binds the sun to it */}
       <Tower uniforms={uniforms} fins={tier !== "low"} shadows={t.shadows} crownRef={crownRef} />
-      {step >= 1 && <World uniforms={uniforms} shadows={t.shadows} buildings={t.buildings} crownRef={crownRef} />}
+      {step >= 1 && <World uniforms={uniforms} sky={sky} shadows={t.shadows} buildings={t.buildings} crownRef={crownRef} />}
       {step >= 2 && (
         <>
           <Selection uniforms={uniforms} />
