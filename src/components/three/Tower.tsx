@@ -11,6 +11,7 @@ import {
   floorHalfSize,
   floorRotationDeg,
 } from "@/lib/tower";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { extrudeY, perimeterSamples, plateShape } from "./geometry";
 import { createGlassMaterial, createSlabMaterial, type SharedUniforms } from "./materials";
 
@@ -41,9 +42,23 @@ export function Tower({ uniforms, fins, shadows, crownRef }: Props) {
     fin.translate(0, GLASS_H / 2, 0.03);
     const crownFin = new THREE.BoxGeometry(0.03, 1, 0.12);
     crownFin.translate(0, 0.5, 0);
+    // podium + its garden roof: one mesh, colour per vertex (one draw call)
+    const tint = (g: THREE.BufferGeometry, hex: string) => {
+      const c = new THREE.Color(hex);
+      const n = g.getAttribute("position").count;
+      const a = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) c.toArray(a, i * 3);
+      g.setAttribute("color", new THREE.BufferAttribute(a, 3));
+      return g;
+    };
+    const podiumParts = [
+      tint(extrudeY(plateShape(2.75, 96), PODIUM_H), "#cbbda3"),
+      tint(extrudeY(plateShape(2.6, 96), 0.025).translate(0, PODIUM_H, 0), "#6d7958"),
+    ];
+    const podium = mergeGeometries(podiumParts)!;
+    podiumParts.forEach((g) => g.dispose());
     return {
-      podium: extrudeY(plateShape(2.75, 96), PODIUM_H),
-      garden: extrudeY(plateShape(2.6, 96), 0.025),
+      podium,
       lantern: extrudeY(plateShape(1, 96), 0.55),
       glass,
       slab,
@@ -59,6 +74,14 @@ export function Tower({ uniforms, fins, shadows, crownRef }: Props) {
   const topRot = floorRotationDeg(FLOORS) * DEG;
   const topSize = floorHalfSize(FLOORS);
   const crownCount = 36;
+  // the lit crown and the aviation beacon
+  const halos = useMemo<Halo[]>(
+    () => [
+      { y: topY + 1.6, size: 11, color: "#ffb45a", base: 0.05, gain: 0.55 },
+      { y: topY + 6.45, size: 1.6, color: "#ff4a3a", base: 0.25, gain: 0.9 },
+    ],
+    [topY]
+  );
 
   useLayoutEffect(() => {
     const m = new THREE.Matrix4();
@@ -129,7 +152,6 @@ export function Tower({ uniforms, fins, shadows, crownRef }: Props) {
   useLayoutEffect(
     () => () => {
       res.podium.dispose();
-      res.garden.dispose();
       res.lantern.dispose();
       res.glass.dispose();
       res.slab.dispose();
@@ -147,11 +169,7 @@ export function Tower({ uniforms, fins, shadows, crownRef }: Props) {
       {/* podium + garden roof */}
       <mesh position={[0, 0, 0]} castShadow={shadows} receiveShadow={shadows}>
         <primitive object={res.podium} attach="geometry" />
-        <meshStandardMaterial color="#cbbda3" roughness={0.75} />
-      </mesh>
-      <mesh position={[0, PODIUM_H, 0]} receiveShadow={shadows}>
-        <primitive object={res.garden} attach="geometry" />
-        <meshStandardMaterial color="#6d7958" roughness={0.95} />
+        <meshStandardMaterial vertexColors roughness={0.8} />
       </mesh>
 
       <instancedMesh
@@ -189,72 +207,84 @@ export function Tower({ uniforms, fins, shadows, crownRef }: Props) {
         <meshBasicMaterial color="#ff4a3a" toneMapped={false} />
       </mesh>
       {/* soft halos: the lit crown and the aviation beacon (additive billboards, no textures) */}
-      <Glow uniforms={uniforms} position={[0, topY + 1.6, 0]} size={11} color="#ffb45a" base={0.05} gain={0.55} />
-      <Glow uniforms={uniforms} position={[0, topY + 6.45, 0]} size={1.6} color="#ff4a3a" base={0.25} gain={0.9} />
+      <Glows uniforms={uniforms} halos={halos} />
     </group>
   );
 }
 
 const glowVertex = /* glsl */ `
-uniform float uSize;
+attribute vec3 aCenter;
+attribute vec3 aColor;
+attribute vec3 aSizeBaseGain;
 varying vec2 vUv;
+varying vec3 vColor;
+varying vec2 vBaseGain;
 void main() {
   vUv = uv;
-  vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-  mv.xy += position.xy * uSize;
+  vColor = aColor;
+  vBaseGain = aSizeBaseGain.yz;
+  vec4 mv = modelViewMatrix * vec4(aCenter, 1.0);
+  mv.xy += position.xy * aSizeBaseGain.x;
   gl_Position = projectionMatrix * mv;
 }`;
 const glowFragment = /* glsl */ `
-uniform vec3 uColor;
-uniform float uBase;
-uniform float uGain;
 uniform float uLights;
 varying vec2 vUv;
+varying vec3 vColor;
+varying vec2 vBaseGain;
 void main() {
   float d = length(vUv - 0.5) * 2.0;
   float a = exp(-d * d * 5.0) * (1.0 - smoothstep(0.7, 1.0, d));
-  gl_FragColor = vec4(uColor * a * (uBase + uGain * uLights), 1.0);
+  gl_FragColor = vec4(vColor * a * (vBaseGain.x + vBaseGain.y * uLights), 1.0);
 }`;
 
-/** Camera-facing additive halo whose strength follows the shared light level. */
-function Glow({
-  uniforms,
-  position,
-  size,
-  color,
-  base,
-  gain,
-}: {
-  uniforms: SharedUniforms;
-  position: [number, number, number];
+interface Halo {
+  y: number;
   size: number;
   color: string;
   base: number;
   gain: number;
-}) {
-  const mat = useMemo(
-    () =>
-      new THREE.ShaderMaterial({
-        vertexShader: glowVertex,
-        fragmentShader: glowFragment,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        toneMapped: false,
-        uniforms: {
-          uSize: { value: size },
-          uColor: { value: new THREE.Color(color) },
-          uBase: { value: base },
-          uGain: { value: gain },
-          uLights: uniforms.uLights,
-        },
-      }),
-    [uniforms, size, color, base, gain]
+}
+
+/** Camera-facing additive halos on the tower axis, all in one draw call; strength follows the shared light level. */
+function Glows({ uniforms, halos }: { uniforms: SharedUniforms; halos: Halo[] }) {
+  const res = useMemo(() => {
+    const quads = halos.map((h) => {
+      const g = new THREE.PlaneGeometry(1, 1);
+      const n = g.getAttribute("position").count;
+      const c = new THREE.Color(h.color);
+      const center = new Float32Array(n * 3);
+      const color = new Float32Array(n * 3);
+      const sbg = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        center.set([0, h.y, 0], i * 3);
+        c.toArray(color, i * 3);
+        sbg.set([h.size, h.base, h.gain], i * 3);
+      }
+      g.setAttribute("aCenter", new THREE.BufferAttribute(center, 3));
+      g.setAttribute("aColor", new THREE.BufferAttribute(color, 3));
+      g.setAttribute("aSizeBaseGain", new THREE.BufferAttribute(sbg, 3));
+      return g;
+    });
+    const geo = mergeGeometries(quads)!;
+    quads.forEach((g) => g.dispose());
+    const mat = new THREE.ShaderMaterial({
+      vertexShader: glowVertex,
+      fragmentShader: glowFragment,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+      uniforms: { uLights: uniforms.uLights },
+    });
+    return { geo, mat };
+  }, [uniforms, halos]);
+  useEffect(
+    () => () => {
+      res.geo.dispose();
+      res.mat.dispose();
+    },
+    [res]
   );
-  useEffect(() => () => mat.dispose(), [mat]);
-  return (
-    <mesh position={position} material={mat} renderOrder={3} frustumCulled={false}>
-      <planeGeometry args={[1, 1]} />
-    </mesh>
-  );
+  return <mesh geometry={res.geo} material={res.mat} renderOrder={3} frustumCulled={false} />;
 }

@@ -45,11 +45,14 @@ Plus: custom 404 ("Level not found"), skip link, sticky header with section nav 
 - Selection overlay: a gold outline loop around the chosen level and a translucent teal volume over the chosen
   residence (sector of the floor plate, rebuilt only when the selection changes).
 - Crown: a lit fin crown + aviation beacon. Podium, lagoon ring and a 2-lane causeway.
-- Context city: three instanced draw calls (blocks, round towers, stepped towers) with facade, roof and window-light patterns in the shader.
+- Context city: every lot (block, round tower, stepped tower) baked once into one static world-space mesh (1 draw call; tint,
+  glass flag and seed as vertex attributes) with facade, roof and window-light patterns in the shader.
 - Sky: back-face sphere shader with real solar geometry — sun position from the equinox solar path at 25.2° N,
   hour 05:00–23:00. Day → golden hour → blue hour → night with procedural stars. Fog and the sun light colour follow.
 - Lighting: one directional sun (+ shadow map on high tier only, updated only on change), hemisphere fill, and a
-  code-made `<Environment>` that renders the sky dome itself (plus two soft `<Lightformer>`s) for glass reflections (no HDRI download).
+  code-made reflection cube that renders the sky dome itself (plus two soft light panels) for glass reflections (no HDRI download).
+  The cube (6 passes + three's PMREM blur) is re-rendered only when the hour changes (throttled to ~8/s while scrubbing or
+  playing), never on camera-only frames.
 - Camera: OrbitControls (damped, clamped polar + distance). Changing level glides the orbit target to that level;
   picking a residence swings the camera to face that facade. Dragging cancels any glide.
 
@@ -57,7 +60,7 @@ Plus: custom 404 ("Level not found"), skip link, sticky header with section nav 
 the whole tower, crown and spire seen from the east-south-east, with the sun, a glitter path on the sea and thin cirrus
 behind it. The setting is laid out by one set of functions shared by the ground shader and the building placement: the
 Gulf to the west, a winding creek north of the quay, the round lagoon, a 6-unit street grid with boulevards, parks and
-beaches, and desert dunes beyond the city edge. The context city is three instanced draw calls (blocks, round towers,
+beaches, and desert dunes beyond the city edge. The context city is one merged draw call (blocks, round towers,
 stepped towers) on 2 × 2 lots per block, with a tall glass downtown to the south, a marina skyline on the coast and a low
 stone quarter across the creek; facades, roofs and window lights come from the shader. Water reflects the same analytic
 sky as the dome (ripples, Fresnel, sun glitter), and the reflection cube now renders that sky dome, so all glass mirrors
@@ -77,7 +80,7 @@ explorer column scrolls past the sticky stage, the camera closes in from the est
 | Antialias | yes | yes | no |
 | Sun shadow map | 2048, on-change only | off (baked contact shadow) | off |
 | Context buildings | 520 | 320 | 140 |
-| Env map resolution | 256 | 128 | 64 |
+| Reflection cube size | 256 | 64 | 32 |
 
 GPU name via `WEBGL_debug_renderer_info` (probed after window `load` + idle, without importing three): software
 renderer (SwiftShader, llvmpipe, Basic Render, or a `failIfMajorPerformanceCaveat` refusal) → no 3D chunk at all, the
@@ -92,9 +95,12 @@ localStorage, `?motion=full|reduced` overrides). Reduced = no intro sweep, level
 glide, no time-lapse button. All controls still work.
 
 **Warm-up:** the poster stays visible with a "Composing the skyline" status while the scene mounts in
-slices (yielding between them) and compiles (`gl.compileAsync`), then the canvas fades in (opacity only).
+slices (yielding between them) and compiles (`gl.compileAsync`), then the canvas fades in (opacity only). The scene stays
+hidden and nothing is drawn until every slice is mounted and compiled (a render gate), so each program is compiled once, in
+parallel, with the final lights, shadow type and environment.
 
-**No-WebGL / software renderer / context lost:** a designed code-made SVG poster of the tower at golden hour stays in place (with a short
+**No-WebGL / software renderer / context lost:** a designed code-made SVG poster of the hero's sunset establishing shot (twisted tower, sun and glitter path on the Gulf,
+cirrus, beach, creek, lagoon ring and the lit city grid; ~35 KB inline, ~10 KB gzip) stays in place (with a short
 note when WebGL is missing or lost); the residence finder (level, residence, details) keeps working because it is plain DOM.
 
 ## 5. Design system
@@ -193,7 +199,7 @@ No downloaded models, textures, HDRIs, images or audio.
 
 - Route first-load JS < 250 KB gzip, excluding the lazy 3D chunk (three + r3f + drei) which loads after window `load` + idle.
 - LCP element = H1 text (server-rendered). Fonts `display: swap`, two families.
-- 3D: ≤ 22 draw calls (plus 6 small reflection-cube passes per drawn frame), ≤ 120 k triangles, no textures (all procedural in shader), shadow map only on high tier.
+- 3D: ≤ 16 draw calls per camera frame (the reflection cube + PMREM, ~35 more, only on frames where the hour changed), ≤ 120 k triangles, no textures (all procedural in shader), shadow map only on high tier.
 - Idle tab = 0 frames rendered. No scroll smoothing library (native scroll), no GSAP needed.
 - CSS: only `transform`/`opacity` animated, no `backdrop-filter` anywhere.
 - Lighthouse mobile targets: Performance ≥ 85, Accessibility/Best Practices/SEO ≥ 95.

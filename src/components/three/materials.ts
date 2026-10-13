@@ -192,33 +192,25 @@ export function createSlabMaterial(u: SharedUniforms) {
 }
 
 /**
- * Context city: one material for every building type. Per instance: tint (instanceColor) and `aKind`
+ * Context city: one merged world-space mesh, one material. Per vertex: tint (vertex colour), seed and `aKind`
  * (0 = stone with punched windows, 1 = curtain-wall glass). Facade grid, roofs and night windows from world position.
  */
 export function createCityMaterial(u: SharedUniforms) {
-  const m = new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.85, metalness: 0.05, envMapIntensity: 1.5 });
+  const m = new THREE.MeshStandardMaterial({ color: "#ffffff", vertexColors: true, roughness: 0.85, metalness: 0.05, envMapIntensity: 1.5 });
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, u);
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute float aKind;\nvarying vec3 vHzWorld;\nvarying vec3 vHzNW;\nvarying float vHzK;\nvarying float vHzSeed;"
+        "#include <common>\nattribute float aKind;\nattribute float aSeed;\nvarying vec3 vHzWorld;\nvarying vec3 vHzNW;\nvarying float vHzK;\nvarying float vHzSeed;"
       )
       .replace(
         "#include <worldpos_vertex>",
         `#include <worldpos_vertex>
-        vec4 hzWp = vec4(transformed, 1.0);
-        vec3 hzNo = normal;
-        float hzSd = 0.0;
-        #ifdef USE_INSTANCING
-          hzWp = instanceMatrix * hzWp;
-          hzNo = mat3(instanceMatrix) * normal;
-          hzSd = fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
-        #endif
-        vHzWorld = (modelMatrix * hzWp).xyz;
-        vHzNW = hzNo;
+        vHzWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        vHzNW = normal;
         vHzK = aKind;
-        vHzSeed = hzSd;`
+        vHzSeed = aSeed;`
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
@@ -263,7 +255,7 @@ export function createCityMaterial(u: SharedUniforms) {
         totalEmissiveRadiance += hzTint * hzSide * hzWinL * hzOn * smoothstep(0.0, 0.5, uLights) * (0.2 + 0.12 * uNight) * (0.6 + 0.8 * hzHash(hzId * 1.3));`
       );
   };
-  m.customProgramCacheKey = () => "hz-city-2";
+  m.customProgramCacheKey = () => "hz-city-3";
   return m;
 }
 

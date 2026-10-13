@@ -16,8 +16,8 @@ export interface TierSettings {
 
 export const TIERS: Record<Tier, TierSettings> = {
   high: { dpr: 2, antialias: true, shadows: true, buildings: 520, envRes: 256 },
-  medium: { dpr: 1.5, antialias: true, shadows: false, buildings: 320, envRes: 128 },
-  low: { dpr: 1, antialias: false, shadows: false, buildings: 140, envRes: 64 },
+  medium: { dpr: 1.5, antialias: true, shadows: false, buildings: 320, envRes: 64 },
+  low: { dpr: 1, antialias: false, shadows: false, buildings: 140, envRes: 32 },
 };
 
 /** webgl: a WebGL 2 context can be made at all. software: it runs on the CPU, so the 3D is skipped

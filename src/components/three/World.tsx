@@ -380,74 +380,57 @@ function planCity(count: number): Lot[] {
   return lots.slice(0, count);
 }
 
+/** The whole context city baked into one static mesh (one draw call): each lot's box / cylinder / stepped block is
+    transformed into world space once, with its tint, glass flag and a per-building seed as vertex attributes. */
 function City({ uniforms, count, shadows }: { uniforms: SharedUniforms; count: number; shadows: boolean }) {
-  const refs = [useRef<THREE.InstancedMesh>(null), useRef<THREE.InstancedMesh>(null), useRef<THREE.InstancedMesh>(null)];
   const res = useMemo(() => {
-    const box = new THREE.BoxGeometry(1, 1, 1);
-    box.translate(0, 0.5, 0);
-    const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 20, 1);
-    cyl.translate(0, 0.5, 0);
+    const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+    const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 20, 1).translate(0, 0.5, 0);
     const parts = [
       new THREE.BoxGeometry(1, 0.62, 1).translate(0, 0.31, 0),
       new THREE.BoxGeometry(0.76, 0.24, 0.76).translate(0, 0.74, 0),
       new THREE.BoxGeometry(0.52, 0.14, 0.52).translate(0, 0.93, 0),
     ];
     const stepped = mergeGeometries(parts)!;
-    parts.forEach((p) => p.dispose());
-    const geos = [box, cyl, stepped];
-    for (const g of geos) g.setAttribute("aKind", new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
-    return { geos, mat: createCityMaterial(uniforms) };
-  }, [uniforms, count]);
+    const protos = [box, cyl, stepped];
 
-  useLayoutEffect(() => {
     const lots = planCity(count);
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const p = new THREE.Vector3();
     const s = new THREE.Vector3();
     const up = new THREE.Vector3(0, 1, 0);
-    const n = [0, 0, 0];
+    const pieces: THREE.BufferGeometry[] = [];
     for (const l of lots) {
-      const mesh = refs[l.type].current;
-      if (!mesh) continue;
-      const i = n[l.type]++;
+      const g = protos[l.type].clone();
       q.setFromAxisAngle(up, l.rot);
-      mesh.setMatrixAt(i, m.compose(p.set(l.x, 0, l.z), q, s.set(l.w, l.h, l.d)));
-      mesh.setColorAt(i, l.tint);
-      (res.geos[l.type].getAttribute("aKind") as THREE.InstancedBufferAttribute).setX(i, l.glass);
+      g.applyMatrix4(m.compose(p.set(l.x, 0, l.z), q, s.set(l.w, l.h, l.d)));
+      const n = g.getAttribute("position").count;
+      const col = new Float32Array(n * 3);
+      const kind = new Float32Array(n).fill(l.glass);
+      const seed = new Float32Array(n).fill(((Math.sin(l.x * 12.9898 + l.z * 78.233) * 43758.5453) % 1 + 1) % 1);
+      for (let i = 0; i < n; i++) l.tint.toArray(col, i * 3);
+      g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+      g.setAttribute("aKind", new THREE.BufferAttribute(kind, 1));
+      g.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
+      g.deleteAttribute("uv");
+      pieces.push(g);
     }
-    refs.forEach((r, k) => {
-      const mesh = r.current;
-      if (!mesh) return;
-      mesh.count = n[k];
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-      res.geos[k].getAttribute("aKind").needsUpdate = true;
-      mesh.computeBoundingSphere();
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [count, res]);
+    const geo = mergeGeometries(pieces)!;
+    geo.computeBoundingSphere();
+    pieces.forEach((g) => g.dispose());
+    parts.forEach((g) => g.dispose());
+    protos.forEach((g) => g.dispose());
+    return { geo, mat: createCityMaterial(uniforms) };
+  }, [uniforms, count]);
 
   useLayoutEffect(
     () => () => {
-      res.geos.forEach((g) => g.dispose());
+      res.geo.dispose();
       res.mat.dispose();
     },
     [res]
   );
 
-  return (
-    <>
-      {res.geos.map((g, k) => (
-        <instancedMesh
-          key={k}
-          ref={refs[k]}
-          args={[g, res.mat, count]}
-          receiveShadow={shadows}
-          castShadow={false}
-          frustumCulled={false}
-        />
-      ))}
-    </>
-  );
+  return <mesh geometry={res.geo} material={res.mat} receiveShadow={shadows} frustumCulled={false} />;
 }
