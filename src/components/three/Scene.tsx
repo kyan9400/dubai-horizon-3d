@@ -10,6 +10,7 @@ import { Tower } from "./Tower";
 import { World, createSkyMaterial } from "./World";
 import { Selection } from "./Selection";
 import { CameraRig } from "./CameraRig";
+import { loadSatellite, type SatUniforms } from "./satellite";
 
 export interface SceneProps {
   tier: Tier;
@@ -244,6 +245,22 @@ export default function Scene({ tier, reduced, onReady, onLost }: SceneProps) {
   const sky = useMemo(() => createSkyMaterial(uniforms), [uniforms]);
   useEffect(() => () => sky.dispose(), [sky]);
   const crownRef = useRef<THREE.MeshStandardMaterial>(null);
+  // the real coast imagery loads with the 3D chunk; the world is mounted (and compiled) once it is here
+  const [sat, setSat] = useState<SatUniforms | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadSatellite(tier === "high").then((s) => alive && setSat(s));
+    return () => {
+      alive = false;
+    };
+  }, [tier]);
+  useEffect(
+    () => () => {
+      sat?.uSat.value.dispose();
+      sat?.uSatMask.value.dispose();
+    },
+    [sat]
+  );
   const [revealed, setRevealed] = useState(false);
   const [step, setStep] = useState(0);
   const gate = useRef(false);
@@ -273,7 +290,9 @@ export default function Scene({ tier, reduced, onReady, onLost }: SceneProps) {
       <group visible={step >= 2}>
         {/* the tower first, so its crown material exists when the world binds the sun to it */}
         <Tower uniforms={uniforms} fins={tier !== "low"} shadows={t.shadows} crownRef={crownRef} />
-        {step >= 1 && <World uniforms={uniforms} sky={sky} shadows={t.shadows} buildings={t.buildings} crownRef={crownRef} />}
+        {step >= 1 && sat && (
+          <World uniforms={uniforms} sky={sky} shadows={t.shadows} buildings={t.buildings} crownRef={crownRef} sat={sat} />
+        )}
       </group>
       {step >= 2 && (
         <>
@@ -284,7 +303,7 @@ export default function Scene({ tier, reduced, onReady, onLost }: SceneProps) {
         </>
       )}
       <GatedRender gate={gate} />
-      <Steps step={step} total={2} onNext={nextStep} />
+      <Steps step={step} total={sat ? 2 : 1} onNext={nextStep} />
     </Canvas>
   );
 }

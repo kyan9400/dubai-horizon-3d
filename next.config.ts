@@ -7,6 +7,8 @@ const PAGES_BASE = "/dubai-horizon-3d";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // lets client code build /public URLs that also work under the Pages base path
+  env: { NEXT_PUBLIC_BASE_PATH: isPages ? PAGES_BASE : "" },
   ...(isPages
     ? {
         output: "export",

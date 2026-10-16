@@ -202,6 +202,10 @@ export default function Home() {
                 ))}
               </dl>
               <p className="fine fine--dark">Indicative drive times outside peak hours.</p>
+              <p className="fine fine--dark">
+                The ground around the 3D tower is the real Dubai coastline, Palm Jumeirah included, from Landsat satellite
+                data drawn at half scale. The tower and the quay are imagined. Imagery: NASA.
+              </p>
             </div>
             <LocationMap />
           </div>

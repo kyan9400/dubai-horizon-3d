@@ -1,8 +1,8 @@
 "use client";
 
 /* Motion preference.
-   Follows prefers-reduced-motion by default, but the visitor can turn full motion back on (many Windows users switch
-   animations off for speed, not comfort). The choice is remembered; ?motion=full|reduced overrides for testing.
+   Full motion by default on a first visit (whatever the OS reports); the header toggle switches to reduced motion and
+   back. The choice is remembered in localStorage; ?motion=full|reduced overrides for testing.
    The inline script in layout.tsx applies the same logic before first paint, so CSS never flashes. */
 
 import { useSyncExternalStore } from "react";
@@ -27,7 +27,7 @@ function compute(): boolean {
   } catch {
     /* storage blocked */
   }
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return false;
 }
 
 export function getReducedMotion(): boolean {
@@ -61,4 +61,4 @@ export function useReducedMotion(): boolean {
 }
 
 /** Runs before paint (stringified into a <script> in the root layout). */
-export const motionBootScript = `(function(){try{var r=window.matchMedia('(prefers-reduced-motion: reduce)').matches;var s=null;try{s=localStorage.getItem('${MOTION_KEY}')}catch(e){}var u=new URLSearchParams(location.search).get('motion');var c=(u==='full'||u==='reduced')?u:s;if(c==='full')r=false;else if(c==='reduced')r=true;var d=document.documentElement;d.classList.add(r?'reduce-motion':'motion-ok');}catch(e){}})();`;
+export const motionBootScript = `(function(){try{var r=false;var s=null;try{s=localStorage.getItem('${MOTION_KEY}')}catch(e){}var u=new URLSearchParams(location.search).get('motion');var c=(u==='full'||u==='reduced')?u:s;if(c==='full')r=false;else if(c==='reduced')r=true;var d=document.documentElement;d.classList.add(r?'reduce-motion':'motion-ok');}catch(e){}})();`;

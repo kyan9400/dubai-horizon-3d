@@ -8,6 +8,7 @@ import { explorer } from "@/lib/store";
 import { sunAt, type SunState } from "@/lib/sun";
 import { HEAD, SKY_GLSL, createCityMaterial, createGroundMaterial, type SharedUniforms } from "./materials";
 import { mulberry32 } from "./geometry";
+import type { SatUniforms } from "./satellite";
 
 /* ----------------------------------------------------------------------------
    Sky dome: day → golden hour → blue hour → night, with sun disc, cirrus and stars.
@@ -84,6 +85,7 @@ interface WorldProps {
   shadows: boolean;
   buildings: number;
   crownRef: React.RefObject<THREE.MeshStandardMaterial | null>;
+  sat: SatUniforms;
 }
 
 interface SunTargets {
@@ -172,7 +174,7 @@ function bindSun(t: SunTargets) {
   return explorer.subscribe(apply);
 }
 
-export function World({ uniforms, sky, shadows, buildings, crownRef }: WorldProps) {
+export function World({ uniforms, sky, shadows, buildings, crownRef, sat }: WorldProps) {
   const get = useThree((st) => st.get);
   const sunRef = useRef<THREE.DirectionalLight>(null);
   const moonRef = useRef<THREE.DirectionalLight>(null);
@@ -180,7 +182,8 @@ export function World({ uniforms, sky, shadows, buildings, crownRef }: WorldProp
   const hemiRef = useRef<THREE.HemisphereLight>(null);
   const quayRef = useRef<THREE.MeshStandardMaterial>(null);
 
-  const fog = useMemo(() => new THREE.Fog("#c9d8e2", 90, 950), []);
+  // pushed back far enough that the real coastline (Palm Jumeirah, the shore) still reads through the haze
+  const fog = useMemo(() => new THREE.Fog("#c9d8e2", 130, 1500), []);
 
   useLayoutEffect(() => attachAtmosphere(get, fog, shadows), [get, fog, shadows]);
 
@@ -225,7 +228,7 @@ export function World({ uniforms, sky, shadows, buildings, crownRef }: WorldProp
       <directionalLight ref={fillRef} position={[40, 30, 20]} color="#9db4d6" intensity={0.4} />
       <directionalLight ref={moonRef} position={[-30, 40, -20]} color={PAL.moon} intensity={0} />
 
-      <Ground uniforms={uniforms} quayRef={quayRef} shadows={shadows} />
+      <Ground uniforms={uniforms} quayRef={quayRef} shadows={shadows} sat={sat} />
       <City uniforms={uniforms} count={buildings} shadows={shadows} />
     </>
   );
@@ -246,21 +249,34 @@ function waterD(x: number, z: number) {
 }
 
 /* ----------------------------------------------------------------------------
-   Ground: one shader plane (desert, city blocks, roads, beach, Gulf, creek, lagoon) + quay lamps.
+   Ground: one shader plane (city blocks, roads, beach, Gulf, creek, lagoon around the quay; the real coast from NASA
+   Landsat imagery beyond it) + quay lamps.
    ---------------------------------------------------------------------------- */
 function Ground({
   uniforms,
   quayRef,
   shadows,
+  sat,
 }: {
   uniforms: SharedUniforms;
   quayRef: React.RefObject<THREE.MeshStandardMaterial | null>;
   shadows: boolean;
+  sat: SatUniforms;
 }) {
   const lampRef = useRef<THREE.InstancedMesh>(null);
   const LAMPS = 72;
-  const mat = useMemo(() => createGroundMaterial(uniforms), [uniforms]);
+  const gl = useThree((st) => st.gl);
+  const mat = useMemo(() => createGroundMaterial(uniforms, sat), [uniforms, sat]);
   useEffect(() => () => mat.dispose(), [mat]);
+
+  // upload the imagery now (sharp at grazing angles), so the first revealed frame does not stall on it
+  useLayoutEffect(() => {
+    const aniso = Math.min(8, gl.capabilities.getMaxAnisotropy());
+    for (const t of [sat.uSat.value, sat.uSatMask.value]) {
+      t.anisotropy = aniso;
+      gl.initTexture(t);
+    }
+  }, [gl, sat]);
 
   useLayoutEffect(() => {
     const mesh = lampRef.current;

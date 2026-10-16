@@ -19,9 +19,15 @@ and drag the sun across the sky to see how the light falls on each facade.
   day, golden hour, blue hour and a starry night; fog, sun colour, environment intensity and city lights follow.
 - **Context city.** An instanced district (one draw call), taller and denser toward "Downtown", with night windows from
   world-space position, a lagoon, quay lights and a causeway.
+- **Real ground: the Dubai coast from NASA Landsat.** Beyond the fictional quay the ground is real satellite data: a
+  median composite of six clear NASA HLS L30 (Landsat 8/9) passes, rotated so the shore lines up with the scene's sea
+  edge and drawn at half scale, so the Palm Jumeirah, Palm Jebel Ali, The World islands and the city grid show from the
+  hero view. A derived mask turns the real sea into the reflective water shader and lights the real built-up areas
+  sodium-orange after dusk; the day/night slider tints and relights it. 2048 px on the high tier, 1024 px otherwise
+  (~1 MB in total), loaded with the 3D chunk behind the poster. Credited "Imagery: NASA" in the Location section.
 - **Camera.** OrbitControls with glides: a new level moves the orbit target, a new residence swings the camera to face
   that facade; dragging cancels the swing.
-- **No downloaded assets.** Reflections come from a code-made `<Environment>` of `<Lightformer>`s (no HDRI).
+- **No HDRI.** Reflections come from a code-made environment cube of the live sky (no HDRI download).
 
 ## Performance
 
@@ -38,8 +44,8 @@ and drag the sun across the sky to see how the light falls on each facade.
   (SwiftShader, llvmpipe, Microsoft Basic Render, or a `failIfMajorPerformanceCaveat` refusal) never load it and keep the
   poster. `?quality=low|medium|high` forces the 3D on.
 - Native scrolling only: no scroll-smoothing library, no GSAP, no `backdrop-filter`.
-- `prefers-reduced-motion` is respected by default, with a header toggle to turn full motion on (saved in
-  localStorage, `?motion=full|reduced` overrides). Reduced motion = no intro sweep, cuts instead of glides, no time-lapse.
+- Full motion by default on a first visit; the header "Reduce motion" toggle switches it off (saved in
+  localStorage and respected on later visits, `?motion=full|reduced` overrides). Reduced motion = no intro sweep, cuts instead of glides, no time-lapse.
 - No WebGL, a software renderer or a lost context: the designed poster stays and the residence finder keeps working (it is plain DOM).
 
 ## Tech stack
@@ -73,7 +79,8 @@ src/lib/                 tower data model, sun math, quality tiers, motion prefe
 
 ## Credits
 
-All 3D, imagery and illustration are made in code for this project. Fonts: Bodoni Moda and Manrope (SIL OFL).
+All 3D and illustration are made in code for this project; the ground imagery is NASA Landsat data (public domain).
+Fonts: Bodoni Moda and Manrope (SIL OFL).
 See [CREDITS.md](CREDITS.md).
 
 ## Copyright

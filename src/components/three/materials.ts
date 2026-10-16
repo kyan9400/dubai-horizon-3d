@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLASS_H } from "@/lib/tower";
+import { SAT_SIZE, type SatUniforms } from "./satellite";
 
 /* Shared uniforms: written by the scene controllers when the store changes, read by every patched material.
    The sky terms live here too, so the water and the sky dome compute exactly the same colours. */
@@ -276,15 +277,24 @@ float hzWaterD(vec2 p) {
 }
 `;
 
-export function createGroundMaterial(u: SharedUniforms) {
+/* Beyond the quay the ground is the real Dubai coast (NASA Landsat, see satellite.ts): its land colour replaces the
+   procedural desert, its water mask takes over from the layout functions past ~100 units, and its built-up mask
+   lights the real city grid after dusk. */
+const SAT_GLSL = /* glsl */ `
+uniform sampler2D uSat;
+uniform sampler2D uSatMask;
+uniform float uSatOn;
+`;
+
+export function createGroundMaterial(u: SharedUniforms, sat: SatUniforms) {
   const m = new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.95, metalness: 0 });
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, u);
+    Object.assign(shader.uniforms, u, sat);
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vHzW;")
       .replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\nvHzW = (modelMatrix * vec4(transformed, 1.0)).xyz;");
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vHzW;" + HEAD + SKY_GLSL + LAYOUT_GLSL)
+      .replace("#include <common>", "#include <common>\nvarying vec3 vHzW;" + HEAD + SKY_GLSL + LAYOUT_GLSL + SAT_GLSL)
       .replace(
         "#include <color_fragment>",
         /* glsl */ `#include <color_fragment>
@@ -292,11 +302,21 @@ export function createGroundMaterial(u: SharedUniforms) {
         float hzR = length(hzP);
         float hzWd = hzWaterD(hzP);
         float hzAa = max(fwidth(hzWd), 0.02);
-        float hzWater = 1.0 - smoothstep(-hzAa, hzAa, hzWd);
+        // the real coast: colour + masks, faded in past the procedural quarter around the tower
+        vec2 hzSatUv = vec2(0.5 + hzP.x / ${SAT_SIZE.toFixed(1)}, 0.5 - hzP.y / ${SAT_SIZE.toFixed(1)});
+        vec3 hzSatRaw = texture2D(uSat, hzSatUv).rgb;
+        vec2 hzSatM = texture2D(uSatMask, hzSatUv).rg;
+        vec3 hzSatLin = pow(hzSatRaw, vec3(2.2)) * vec3(1.04, 0.98, 0.92);
+        float hzFar = uSatOn * smoothstep(84.0, 128.0, hzR + 18.0 * (hzFbm(hzP * 0.015 + 3.0) - 0.5) * 2.0);
+        float hzWaterP = 1.0 - smoothstep(-hzAa, hzAa, hzWd);
+        float hzWater = mix(hzWaterP, smoothstep(0.3, 0.7, hzSatM.r), hzFar);
+        // a distance-like shore term for the far water (shallows, city shimmer)
+        float hzWdM = mix(hzWd, (0.5 - hzSatM.r) * 8.0, hzFar);
         // desert: warm sand with long dune ripples
         float hzDn = hzFbm(hzP * 0.03);
         float hzDune = sin(hzP.x * 0.09 + hzP.y * 0.05 + hzDn * 6.0) * 0.5 + 0.5;
         vec3 hzSand = mix(vec3(0.7, 0.55, 0.37), vec3(0.8, 0.64, 0.44), hzDune * 0.5 + hzDn * 0.2);
+        hzSand = mix(hzSand, hzSatLin, uSatOn);
         // city floor: pale concrete blocks, darker asphalt grid, wide boulevards every 4 blocks
         float hzUrbanR = 84.0 + 18.0 * (hzFbm(hzP * 0.02 + 7.0) - 0.5) * 2.0;
         float hzUrban = 1.0 - smoothstep(hzUrbanR - 8.0, hzUrbanR, hzR);
@@ -312,14 +332,18 @@ export function createGroundMaterial(u: SharedUniforms) {
         vec3 hzLand = mix(hzSand, hzCity, hzUrban);
         // beach along the Gulf and the creek
         float hzBeach = 1.0 - smoothstep(0.0, 1.6, hzWd);
-        hzLand = mix(hzLand, vec3(0.86, 0.76, 0.6), hzBeach * (1.0 - step(hzR, 9.5)));
+        hzLand = mix(hzLand, vec3(0.86, 0.76, 0.6), hzBeach * (1.0 - step(hzR, 9.5)) * (1.0 - hzFar));
+        hzLand = mix(hzLand, hzSatLin, hzFar);
+        // moonlit, bluer land at night so the real city reads by its lights, not its daylight colour
+        hzLand *= mix(vec3(1.0), vec3(0.6, 0.68, 0.92), uNight * uSatOn);
         // quay ring and the causeway to the podium
         float hzQuay = step(8.0, hzR) * step(hzR, 8.7);
         float hzCause = step(abs(hzP.x), 0.45) * step(2.6, hzP.y) * step(hzP.y, 8.7);
         hzLand = mix(hzLand, vec3(0.86, 0.8, 0.7), max(hzQuay, hzCause));
         diffuseColor.rgb = hzLand;
         float hzLampLine = max(step(2.9, hzG.x), step(2.9, hzG.y)) * 0.5 + max(step(11.85, hzG2.x), step(11.85, hzG2.y));
-        float hzRoadLit = hzLampLine * hzUrban * (1.0 - hzWater);`
+        float hzRoadLit = hzLampLine * hzUrban * (1.0 - hzWater);
+        float hzSatLit = hzSatM.g * uSatOn * max(hzFar, 1.0 - hzUrban) * (1.0 - hzWater);`
       )
       .replace(
         "#include <emissivemap_fragment>",
@@ -327,7 +351,10 @@ export function createGroundMaterial(u: SharedUniforms) {
         // street lights: the grid glows amber after dusk
         float hzLampK = smoothstep(0.5, 1.0, uLights);
         totalEmissiveRadiance += vec3(1.0, 0.55, 0.22) * hzRoadLit * hzLampK * 0.9;
-        totalEmissiveRadiance += vec3(1.0, 0.75, 0.45) * max(hzQuay, hzCause) * hzLampK * 0.5 * (1.0 - hzWater);`
+        totalEmissiveRadiance += vec3(1.0, 0.75, 0.45) * max(hzQuay, hzCause) * hzLampK * 0.5 * (1.0 - hzWater);
+        // the real city's built-up areas glow sodium-orange, broken into blocks
+        float hzGrain = 0.12 + 0.88 * smoothstep(0.5, 0.9, hzN2(hzP * 1.7)) * (0.5 + hzN2(hzP * 0.21 + 5.0));
+        totalEmissiveRadiance += vec3(1.0, 0.56, 0.24) * hzSatLit * hzGrain * hzLampK * 0.42;`
       )
       .replace(
         "#include <opaque_fragment>",
@@ -350,20 +377,23 @@ export function createGroundMaterial(u: SharedUniforms) {
           vec3 hzRefl = hzSky(normalize(hzRf), 0.0);
           vec3 hzDeep = mix(vec3(0.015, 0.06, 0.075), vec3(0.004, 0.01, 0.02), uNight) * (0.35 + 0.65 * uDay);
           // shallow turquoise along the shore by day
-          hzDeep = mix(hzDeep, vec3(0.05, 0.2, 0.2) * uDay, smoothstep(-2.5, 0.0, hzWd) * 0.6);
-          vec3 hzWaterC = mix(hzDeep, hzRefl * 0.8, clamp(hzFr * 1.1 + 0.08, 0.0, 1.0));
+          hzDeep = mix(hzDeep, vec3(0.05, 0.2, 0.2) * uDay, smoothstep(-2.5, 0.0, hzWdM) * 0.6);
+          // the real Gulf: its turquoise shallows and the reef lines around the islands, dimmed with the light
+          hzDeep = mix(hzDeep, hzSatLin * 0.55 * (0.25 + 0.75 * uDay) * mix(1.0, 0.25, uNight), hzFar * 0.75);
+          // the real Gulf reflects a little less, so its colour (and the shoreline) still reads at grazing angles
+          vec3 hzWaterC = mix(hzDeep, hzRefl * 0.8, clamp(hzFr * mix(1.1, 0.4, hzFar) + 0.08, 0.0, 1.0));
           // the sun's glitter path: a broad specular lobe from the flat sea, broken up by the ripples
           float hzGl = max(dot(reflect(hzV, vec3(0.0, 1.0, 0.0)), uSunDir), 0.0);
           float hzSpark = 0.4 + 1.2 * hzN2(q * 2.3 + hzRip * 0.6);
           vec3 hzSunC = mix(vec3(1.0, 0.92, 0.78), vec3(1.0, 0.5, 0.2), uGolden);
           hzWaterC += hzSunC * (pow(hzGl, 90.0) * 2.5 + pow(hzGl, 14.0) * 0.25) * hzSpark * uSunVis;
           // warm shimmer of the city lights on the water at night
-          hzWaterC += vec3(1.0, 0.6, 0.3) * smoothstep(0.0, 0.6, uLights) * 0.06 * (0.5 + 0.5 * sin(q.x * 3.0 + hzRip.x * 2.0)) * smoothstep(-6.0, 0.0, hzWd);
+          hzWaterC += vec3(1.0, 0.6, 0.3) * smoothstep(0.0, 0.6, uLights) * 0.06 * (0.5 + 0.5 * sin(q.x * 3.0 + hzRip.x * 2.0)) * smoothstep(-6.0, 0.0, hzWdM);
           outgoingLight = mix(outgoingLight, hzWaterC, hzWater);
         }
         #include <opaque_fragment>`
       );
   };
-  m.customProgramCacheKey = () => "hz-ground-2";
+  m.customProgramCacheKey = () => "hz-ground-3";
   return m;
 }
