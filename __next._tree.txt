@@ -1,0 +1,5 @@
+:HL["/dubai-horizon-3d/_next/static/chunks/1_pj4d8ulneni.css","style"]
+:HL["/dubai-horizon-3d/_next/static/media/52b5d5098cb87ddd-s.p.3r2y_bth_sjsm.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+:HL["/dubai-horizon-3d/_next/static/media/9e400763522556e5-s.p.40m0sdlh8l0dz.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+:HL["/dubai-horizon-3d/_next/static/media/a343f882a40d2cc9-s.p.1sj6eobyi31rd.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+0:{"tree":{"name":"","param":null,"prefetchHints":4176,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":4256,"slots":null}}},"staleTime":300,"buildId":"XI4YtCMywxMuIQjaHWrmZ"}
