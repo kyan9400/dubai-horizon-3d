@@ -15,6 +15,5 @@ if (result.status !== 0) process.exit(result.status ?? 1);
 // Pages would otherwise skip the _next/ folder (Jekyll ignores underscore paths).
 writeFileSync("out/.nojekyll", "");
 // the gh-pages branch is a built static copy: tell Vercel's Git integration not to try to deploy it
-writeFileSync("out/vercel.json", JSON.stringify({ git: { deploymentEnabled: false } }) + "
-");
+writeFileSync("out/vercel.json", JSON.stringify({ git: { deploymentEnabled: false } }) + "\n");
 console.log("GitHub Pages build ready in out/");
