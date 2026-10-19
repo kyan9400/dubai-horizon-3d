@@ -235,7 +235,7 @@ export default function Home() {
             </div>
             <p className="credit">
               Concept, design and 3D development by Alhassan Alfarran ·{" "}
-              <a href="https://alhassan-portfolio-sigma.vercel.app" target="_blank" rel="noopener noreferrer">
+              <a href={process.env.NEXT_PUBLIC_PORTFOLIO_URL ?? "https://alhassan-portfolio-sigma.vercel.app"} target="_blank" rel="noopener noreferrer">
                 Portfolio
               </a>{" "}
               ·{" "}
